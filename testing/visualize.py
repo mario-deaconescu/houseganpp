@@ -64,8 +64,8 @@ generator.eval()
 # Initialize variables
 img_shape = (opt.channels, opt.img_size, opt.img_size)
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '/local-scratch2/nnauata/autodesk/CubiCasa5k/'
 
 # Initialize dataset iterator
@@ -74,7 +74,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset,
                                         batch_size=opt.batch_size, 
                                         shuffle=True, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ------------
 #  Vectorize

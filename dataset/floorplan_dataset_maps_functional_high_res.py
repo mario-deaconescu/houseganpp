@@ -16,6 +16,8 @@
 
 import json, os, random, math
 from collections import defaultdict
+from typing import Literal
+
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as T
@@ -26,6 +28,8 @@ import glob
 from PIL import Image, ImageDraw, ImageOps, ImageFilter
 import random
 from misc.utils import ROOM_CLASS, ID_COLOR
+from tqdm.contrib.concurrent import process_map
+
 
 def filter_graphs(graphs, min_h=0.03, min_w=0.03):
     new_graphs = []
@@ -45,6 +49,39 @@ def filter_graphs(graphs, min_h=0.03, min_w=0.03):
         new_graphs.append(g)
     return new_graphs
 
+def read_file(filename: str, split: Literal['train', 'eval', 'test'], target_set: int):
+	a = []
+	if split == 'train':
+		rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(filename[:-1])
+		fp_size = len([x for x in rms_type if x != 15 and x != 17])
+		if fp_size != target_set:
+			a.append(rms_type)
+			a.append(rms_bbs)
+			a.append(fp_eds)
+			a.append(eds_to_rms)
+			a.append(eds_to_rms_tmp)
+			return a
+	elif split == 'eval':
+		rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(filename[:-1])
+		fp_size = len([x for x in rms_type if x != 15 and x != 17])
+		if fp_size == target_set:
+			a.append(rms_type)
+			a.append(rms_bbs)
+			a.append(fp_eds)
+			a.append(eds_to_rms)
+			a.append(eds_to_rms_tmp)
+			return a
+	elif split == 'test':
+		rms_type, fp_eds, rms_bbs, eds_to_rms, eds_to_rms_tmp = reader(filename[:-1])
+		a.append(rms_type)
+		a.append(rms_bbs)
+		a.append(fp_eds)
+		a.append(eds_to_rms)
+		a.append(eds_to_rms_tmp)
+		return a
+	return None
+
+
 class FloorplanGraphDataset(Dataset):
 	def __init__(self, data_path, transform=None, target_set=8, split='train'):
 		super(Dataset, self).__init__()
@@ -54,50 +91,17 @@ class FloorplanGraphDataset(Dataset):
 		f1 = open(data_path,"r")
 		lines=f1.readlines()
 		h=0
-		for line in lines:
-			a=[]
-			h=h+1
-			if(split=='train'):
-				if(h%1==0):
-					with open(line[:-1]) as f2:
-						rms_type, fp_eds,rms_bbs,eds_to_rms,eds_to_rms_tmp=reader(line[:-1]) 
-						fp_size = len([x for x in rms_type if x != 15 and x != 17])
-						if(fp_size != target_set):
-							a.append(rms_type)
-							a.append(rms_bbs)
-							a.append(fp_eds)
-							a.append(eds_to_rms)
-							a.append(eds_to_rms_tmp)
-							self.subgraphs.append(a)
-				self.augment = True
-			elif(split=='eval'):
-				if(h%1==0) :
-					with open(line[:-1]) as f2:
-						rms_type, fp_eds,rms_bbs,eds_to_rms,eds_to_rms_tmp=reader(line[:-1]) 
-						fp_size = len([x for x in rms_type if x != 15 and x != 17])
-						if(fp_size == target_set):
-							a.append(rms_type)
-							a.append(rms_bbs)
-							a.append(fp_eds)
-							a.append(eds_to_rms)
-							a.append(eds_to_rms_tmp)
-							self.subgraphs.append(a)
-				self.augment = False
-			elif(split=='test'):
-				if(h%1==0) :
-					with open(line[:-1]) as f2:
-						rms_type, fp_eds,rms_bbs,eds_to_rms,eds_to_rms_tmp=reader(line[:-1]) 
-						a.append(rms_type)
-						a.append(rms_bbs)
-						a.append(fp_eds)
-						a.append(eds_to_rms)
-						a.append(eds_to_rms_tmp)
-						self.subgraphs.append(a)	
-			else:
-				print('ERR')
-				exit(0) 
+		if split == 'train':
+			self.augment = True
+		elif split == 'eval':
+			self.augment = False
+		elif split == 'test':
+			self.augment = False
+		lines = [os.path.join(os.path.dirname(data_path), line) for line in lines]
+		self.subgraphs = process_map(read_file, lines, [self.split]*len(lines), [self.target_set]*len(lines), max_workers=8, chunksize=100)
+		self.subgraphs = [g for g in self.subgraphs if g is not None]
 		self.transform = transform
-		print(len(self.subgraphs))   
+		print(len(self.subgraphs))
 		
 	def __len__(self):
 		return len(self.subgraphs)

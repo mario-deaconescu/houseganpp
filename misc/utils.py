@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import json, os, random, math
+import sys
 from collections import defaultdict
 
 import torch
@@ -37,16 +38,27 @@ import svgwrite
 import random
 import matplotlib.pyplot as plt
 import webcolors
+
+from src.rplan.types import RoomType, ImagePlan
+
 cv2.setNumThreads(0)
 EXP_ID = random.randint(0, 1000000)
 
-ROOM_CLASS = {"living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "balcony": 5, "entrance": 6, "dining room": 7, "study room": 8,
-              "storage": 10 , "front door": 15, "unknown": 16, "interior_door": 17}
+ROOM_CLASS = {"living_room": 1, "kitchen": 2, "bedroom": 3, "bathroom": 4, "balcony": 5, "entrance": 6,
+              "dining room": 7, "study room": 8,
+              "storage": 10, "front door": 15, "unknown": 16, "interior_door": 17}
 CLASS_ROM = {}
 for x, y in ROOM_CLASS.items():
     CLASS_ROM[y] = x
-ID_COLOR = {1: '#EE4D4D', 2: '#C67C7B', 3: '#FFD274', 4: '#BEBEBE', 5: '#BFE3E8', 6: '#7BA779', 7: '#E87A90', 8: '#FF8C69', 10: '#1F849B', 15: '#727171', 16: '#785A67', 17: '#D3A2C7'}
+ID_COLOR = {1: '#EE4D4D', 2: '#C67C7B', 3: '#FFD274', 4: '#BEBEBE', 5: '#BFE3E8', 6: '#7BA779', 7: '#E87A90',
+            8: '#FF8C69', 10: '#1F849B', 15: '#727171', 16: '#785A67', 17: '#D3A2C7'}
 
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    if torch.backends.mps.is_available():
+        return torch.device("mps")
+    return torch.device("cpu")
 
 # Select random nodes
 def selectRandomNodes(nd_to_sample, batch_size):
@@ -57,35 +69,37 @@ def selectRandomNodes(nd_to_sample, batch_size):
         rooms = np.where(nd_to_sample == k)
         rooms_num = np.array(rooms).shape[-1]
         N = np.random.randint(rooms_num, size=1)
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda() ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device())  ##torch.tensor(list(range(rooms_num))).long().to(get_device()) ##
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
-        shift += rooms_num 
+        shift += rooms_num
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
+
 
 # Select nodes per room type
 def selectNodesTypes(nd_to_sample, batch_size, nds):
-    all_types, fixed_rooms_num, fixed_nodes, shift = [ROOM_CLASS[k]-1 for k in ROOM_CLASS], [], [], 0
+    all_types, fixed_rooms_num, fixed_nodes, shift = [ROOM_CLASS[k] - 1 for k in ROOM_CLASS], [], [], 0
     for k in range(batch_size):
         rooms = np.where(nd_to_sample == k)
         rooms_num = np.array(rooms).shape[-1]
-        _types = np.where(nds[rooms]==1)[1]
+        _types = np.where(nds[rooms] == 1)[1]
         _t = [t for t in all_types if random.uniform(0, 1) > 0.5]
         fixed_rooms = [r for r, _t_x in enumerate(_types) if _t_x in _t]
-#         print(' existing types: {} \n sected types: {} \n fixed rooms {}'.format('-'.join([str(i) for i in _types]), '-'.join([str(i) for i in _t]), '-'.join([str(i) for i in fixed_rooms])))
-        fixed_nodes_state = torch.tensor(fixed_rooms).cuda()
+        #         print(' existing types: {} \n sected types: {} \n fixed rooms {}'.format('-'.join([str(i) for i in _types]), '-'.join([str(i) for i in _t]), '-'.join([str(i) for i in fixed_rooms])))
+        fixed_nodes_state = torch.tensor(fixed_rooms).to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
-        shift += rooms_num 
+        shift += rooms_num
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes.long()] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
+
 
 def fix_nodes(prev_mks, ind_fixed_nodes):
     given_masks = torch.tensor(prev_mks)
@@ -99,7 +113,8 @@ def fix_nodes(prev_mks, ind_fixed_nodes):
     inds_masks[ind_fixed_nodes.long()] = 1.0
     given_masks = torch.cat([given_masks, inds_masks], 1)
     return given_masks
-    
+
+
 def _init_input(graph, prev_state=None, mask_size=64):
     # initialize graph
     given_nds, given_eds = graph
@@ -108,30 +123,31 @@ def _init_input(graph, prev_state=None, mask_size=64):
     z = torch.randn(len(given_nds), 128).float()
     # unpack
     fixed_nodes = prev_state['fixed_nodes']
-    prev_mks = torch.zeros((given_nds.shape[0], mask_size, mask_size))-1.0 if (prev_state['masks'] is None) else prev_state['masks']
+    prev_mks = torch.zeros((given_nds.shape[0], mask_size, mask_size)) - 1.0 if (prev_state['masks'] is None) else \
+    prev_state['masks']
     # initialize masks
     given_masks_in = fix_nodes(prev_mks, torch.tensor(fixed_nodes))
     return z, given_masks_in, given_nds, given_eds
 
-def pad_im(cr_im, final_size=256, bkg_color='white'):    
+
+def pad_im(cr_im, final_size=256, bkg_color='white'):
     new_size = int(np.max([np.max(list(cr_im.size)), final_size]))
     padded_im = Image.new('RGBA', (new_size, new_size), 'white')
-    padded_im.paste(cr_im, ((new_size-cr_im.size[0])//2, (new_size-cr_im.size[1])//2))
-    padded_im = padded_im.resize((final_size, final_size), Image.ANTIALIAS)
+    padded_im.paste(cr_im, ((new_size - cr_im.size[0]) // 2, (new_size - cr_im.size[1]) // 2))
+    padded_im = padded_im.resize((final_size, final_size), Image.Resampling.LANCZOS)
     return padded_im
 
+
 def draw_masks(masks, real_nodes, im_size=256):
-    
     bg_img = Image.new("RGBA", (im_size, im_size), (255, 255, 255, 255))  # Semitransparent background.
     for m, nd in zip(masks, real_nodes):
-        
         # resize map
-        m[m>0] = 255
-        m[m<0] = 0
-        m_lg = cv2.resize(m, (im_size, im_size), interpolation = cv2.INTER_AREA) 
+        m[m > 0] = 255
+        m[m < 0] = 0
+        m_lg = cv2.resize(m, (im_size, im_size), interpolation=cv2.INTER_AREA)
 
         # pick color
-        color = ID_COLOR[nd+1]
+        color = ID_COLOR[nd + 1]
         r, g, b = webcolors.hex_to_rgb(color)
 
         # set drawer
@@ -143,7 +159,7 @@ def draw_masks(masks, real_nodes, im_size=256):
 
         # draw contour
         m_cv = m_lg[:, :, np.newaxis].astype('uint8')
-        ret,thresh = cv2.threshold(m_cv, 127, 255, 0)
+        ret, thresh = cv2.threshold(m_cv, 127, 255, 0)
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         contours = [c for c in contours if len(contours) > 0]
         cnt = np.zeros((256, 256, 3)).astype('uint8')
@@ -153,6 +169,48 @@ def draw_masks(masks, real_nodes, im_size=256):
 
     return bg_img.resize((im_size, im_size))
 
+
+def draw_masks_modified(masks, real_nodes, im_size=256):
+    room_image = -np.ones((im_size, im_size), dtype=float)
+    door_image = -np.ones((im_size, im_size), dtype=float)
+    wall_image = -np.ones((im_size, im_size, 1), dtype=float)
+    for m, nd in zip(masks, real_nodes):
+        # resize map
+        m[m > 0] = 255
+        m[m < 0] = 0
+        m_lg = cv2.resize(m, (im_size, im_size), interpolation=cv2.INTER_AREA)
+        m_lg = m_lg.astype('uint8')
+
+        # pick color
+        room_type = RoomType(nd + 1)
+
+        if room_type in [RoomType.FRONT_DOOR, RoomType.INTERIOR_DOOR]:
+            # door color
+            if room_type == RoomType.FRONT_DOOR:
+                color = 0
+            else:
+                color = 1
+            door_image[m_lg > 0] = color
+            continue
+
+        # room color
+        color = ImagePlan.room_type_to_value(room_type)
+        room_image[m_lg > 0] = color
+
+        # draw walls
+        contours, _ = cv2.findContours(m_lg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        tmp = np.zeros((im_size, im_size, 3), dtype=np.uint8)
+        cv2.drawContours(tmp, contours, -1, (255, 255, 255), 1)
+        tmp = cv2.cvtColor(tmp, cv2.COLOR_BGR2GRAY)
+        tmp = tmp.astype(float)
+        tmp[tmp > 0] = 1
+        wall_image[tmp > 0] = 1
+
+    wall_image = wall_image[:, :, 0]
+    plan = ImagePlan(room_image, wall_image, door_image)
+    return plan.to_image()
+
+
 def combine_images(samples_batch, nodes_batch, edges_batch, nd_to_sample, ed_to_sample):
     samples_batch = samples_batch.detach().cpu().numpy()
     nodes_batch = nodes_batch.detach().cpu().numpy()
@@ -161,10 +219,9 @@ def combine_images(samples_batch, nodes_batch, edges_batch, nd_to_sample, ed_to_
     all_imgs = []
     shift = 0
     for b in range(batch_size):
-
         # split batch
-        inds_nd = np.where(nd_to_sample==b)
-        inds_ed = np.where(ed_to_sample==b)
+        inds_nd = np.where(nd_to_sample == b)
+        inds_ed = np.where(ed_to_sample == b)
         sps = samples_batch[inds_nd]
         nds = nodes_batch[inds_nd]
         eds = edges_batch[inds_ed]
@@ -172,16 +229,17 @@ def combine_images(samples_batch, nodes_batch, edges_batch, nd_to_sample, ed_to_
         # draw
         # graph_image = draw_graph_with_types(nds, eds, shift)
         _image = draw_masks(sps, nds)
-        
+
         # store
         # all_imgs.append(torch.FloatTensor(np.array(graph_image.convert('RGBA')).\
         #                              astype('float').\
         #                              transpose(2, 0, 1))/255.0)
-        all_imgs.append(torch.FloatTensor(np.array(_image.convert('RGBA')).\
-                                     astype('float').\
-                                     transpose(2, 0, 1))/255.0)
+        all_imgs.append(torch.FloatTensor(np.array(_image.convert('RGBA')). \
+                                          astype('float'). \
+                                          transpose(2, 0, 1)) / 255.0)
         shift += len(nds)
     return torch.stack(all_imgs)
+
 
 def draw_graph(g_true):
     # build true graph 
@@ -191,50 +249,50 @@ def draw_graph(g_true):
     edge_color = []
     linewidths = []
     edgecolors = []
-    
+
     # add nodes
     for k, label in enumerate(g_true[0]):
-        _type = label+1 
+        _type = label + 1
         if _type >= 0 and _type not in [15, 17]:
-            G_true.add_nodes_from([(k, {'label':k})])
+            G_true.add_nodes_from([(k, {'label': k})])
             colors_H.append(ID_COLOR[_type])
             node_size.append(1000)
             edgecolors.append('blue')
             linewidths.append(0.0)
-            
+
     # add outside node
-    G_true.add_nodes_from([(-1, {'label':-1})])
+    G_true.add_nodes_from([(-1, {'label': -1})])
     colors_H.append("white")
     node_size.append(750)
     edgecolors.append('black')
     linewidths.append(3.0)
-    
+
     # add edges
     for k, m, l in g_true[1]:
-        _type_k = g_true[0][k]+1  
-        _type_l = g_true[0][l]+1
+        _type_k = g_true[0][k] + 1
+        _type_l = g_true[0][l] + 1
         if m > 0 and (_type_k not in [15, 17] and _type_l not in [15, 17]):
             G_true.add_edges_from([(k, l)])
             edge_color.append('#D3A2C7')
-        elif m > 0 and (_type_k==15 or _type_l==15) and (_type_l!=17 and _type_k!=17):
-            if _type_k==15:
-                G_true.add_edges_from([(l, -1)])   
-            elif _type_l==15:
+        elif m > 0 and (_type_k == 15 or _type_l == 15) and (_type_l != 17 and _type_k != 17):
+            if _type_k == 15:
+                G_true.add_edges_from([(l, -1)])
+            elif _type_l == 15:
                 G_true.add_edges_from([(k, -1)])
             edge_color.append('#727171')
-    
-#     # # visualization - debug
-#     print(len(node_size))
-#     print(len(colors_H))
-#     print(len(linewidths))
-#     print(G_true.nodes())
-#     print(g_true[0])
-#     print(len(edgecolors))
-    
+
+    #     # # visualization - debug
+    #     print(len(node_size))
+    #     print(len(colors_H))
+    #     print(len(linewidths))
+    #     print(G_true.nodes())
+    #     print(g_true[0])
+    #     print(len(edgecolors))
 
     plt.figure()
     pos = nx.nx_agraph.graphviz_layout(G_true, prog='neato')
-    nx.draw(G_true, pos, node_size=node_size, linewidths=linewidths, node_color=colors_H, font_size=14, font_color='white',\
+    nx.draw(G_true, pos, node_size=node_size, linewidths=linewidths, node_color=colors_H, font_size=14,
+            font_color='white', \
             font_weight='bold', edgecolors=edgecolors, edge_color=edge_color, width=4.0, with_labels=False)
     plt.tight_layout()
     plt.savefig('./dump/_true_graph.jpg', format="jpg")
@@ -243,78 +301,78 @@ def draw_graph(g_true):
     rgb_arr = pad_im(rgb_im).convert('RGBA')
     return G_true, rgb_im
 
+
 def remove_multiple_components(masks, nodes):
-    
     new_masks = []
     for mk, nd in zip(masks, nodes):
         m_cv = np.array(mk)
-        m_cv[m_cv>0] = 255.0
-        m_cv[m_cv<0] = 0.0
+        m_cv[m_cv > 0] = 255.0
+        m_cv[m_cv < 0] = 0.0
         m_cv = m_cv.astype('uint8')
-        ret,thresh = cv2.threshold(m_cv, 127, 255 , 0)
+        ret, thresh = cv2.threshold(m_cv, 127, 255, 0)
         contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        if len(contours) > 1:  
+        if len(contours) > 1:
             cnt_m = np.zeros_like(m_cv)
             c = max(contours, key=cv2.contourArea)
             cv2.drawContours(cnt_m, [c], 0, (255, 255, 255), -1)
-            cnt_m[cnt_m>0] = 1.0
-            cnt_m[cnt_m<0] = -1.0
+            cnt_m[cnt_m > 0] = 1.0
+            cnt_m[cnt_m < 0] = -1.0
             new_masks.append(cnt_m)
         else:
             new_masks.append(mk)
     return new_masks
 
+
 def estimate_graph(masks, nodes, G_gt):
-    
     # remove multiple components
     masks = remove_multiple_components(masks, nodes)
-    
+
     G_estimated = nx.Graph()
     colors_H = []
     node_size = []
     edge_color = []
     linewidths = []
-    edgecolors = []    
+    edgecolors = []
     edge_labels = {}
-    
+
     # add nodes
     for k, label in enumerate(nodes):
-        _type = label+1 
+        _type = label + 1
         if _type >= 0 and _type not in [15, 17]:
-            G_estimated.add_nodes_from([(k, {'label':k})])
+            G_estimated.add_nodes_from([(k, {'label': k})])
             colors_H.append(ID_COLOR[_type])
             node_size.append(1000)
             linewidths.append(0.0)
-    
+
     # add outside node
-    G_estimated.add_nodes_from([(-1, {'label':-1})])
+    G_estimated.add_nodes_from([(-1, {'label': -1})])
     colors_H.append("white")
     node_size.append(750)
     edgecolors.append('black')
     linewidths.append(3.0)
-    
+
     # add node-to-door connections
     doors_inds = np.where((nodes == 14) | (nodes == 16))[0]
     rooms_inds = np.where((nodes != 14) & (nodes != 16))[0]
     doors_rooms_map = defaultdict(list)
     for k in doors_inds:
         for l in rooms_inds:
-            if k > l:   
+            if k > l:
                 m1, m2 = masks[k], masks[l]
-                m1[m1>0] = 1.0
-                m1[m1<=0] = 0.0
-                m2[m2>0] = 1.0
-                m2[m2<=0] = 0.0
-                iou = np.logical_and(m1, m2).sum()/float(np.logical_or(m1, m2).sum())
+                m1[m1 > 0] = 1.0
+                m1[m1 <= 0] = 0.0
+                m2[m2 > 0] = 1.0
+                m2[m2 <= 0] = 0.0
+                iou = np.logical_and(m1, m2).sum() / float(np.logical_or(m1, m2).sum())
                 if iou > 0 and iou < 0.2:
-                    doors_rooms_map[k].append((l, iou))    
+                    doors_rooms_map[k].append((l, iou))
 
-    # draw connections            
+                    # draw connections            
     for k in doors_rooms_map.keys():
         _conn = doors_rooms_map[k]
         _conn = sorted(_conn, key=lambda tup: tup[1], reverse=True)
         _conn_top2 = _conn[:2]
-        if nodes[k]+1 != 15:
+        if nodes[k] + 1 != 15:
             if len(_conn_top2) > 1:
                 l1, l2 = _conn_top2[0][0], _conn_top2[1][0]
                 edge_labels[(l1, l2)] = k
@@ -325,7 +383,6 @@ def estimate_graph(masks, nodes, G_gt):
                 edge_labels[(-1, l1)] = k
                 G_estimated.add_edges_from([(-1, l1)])
 
-       
     # add missed edges 
     G_estimated_complete = G_estimated.copy()
     for k, l in G_gt.edges():
@@ -351,11 +408,13 @@ def estimate_graph(masks, nodes, G_gt):
     plt.figure()
     pos = nx.nx_agraph.graphviz_layout(G_estimated_complete, prog='neato')
     weights = [4 for u, v in G_estimated_complete.edges()]
-    nx.draw(G_estimated_complete, pos, edge_color=colors, linewidths=linewidths, edgecolors=edgecolors, node_size=node_size, node_color=colors_H, font_size=14, font_weight='bold', font_color='white', width=weights, with_labels=False)
-    
+    nx.draw(G_estimated_complete, pos, edge_color=colors, linewidths=linewidths, edgecolors=edgecolors,
+            node_size=node_size, node_color=colors_H, font_size=14, font_weight='bold', font_color='white',
+            width=weights, with_labels=False)
+
     plt.tight_layout()
     plt.savefig('./dump/_fake_graph.jpg', format="jpg")
-    
+
     rgb_im = Image.open('./dump/_fake_graph.jpg')
     rgb_arr = pad_im(rgb_im).convert('RGBA')
     plt.close('all')

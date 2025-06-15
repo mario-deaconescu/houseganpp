@@ -321,8 +321,8 @@ generator = generator.eval()
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '../'
 
 # Initialize dataset iterator
@@ -331,7 +331,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 
 # Generate state
@@ -369,7 +369,7 @@ def gen_state(curr_fixed_nodes_state, prev_fixed_nodes_state, sample):
         if len(curr_fixed_nodes_state) > 0:
             print('running state: {}, {}'.format(str(curr_fixed_nodes_state), str(prev_fixed_nodes_state)))
             prev_mks = np.load('{}/feats/feat_{}.npy'.format(PREFIX, '_'.join(map(str, prev_fixed_nodes_state))), allow_pickle=True)
-            prev_mks = torch.tensor(prev_mks).cuda().float()   
+            prev_mks = torch.tensor(prev_mks).to(get_device()).float()   
             given_masks_in[ind_fixed_nodes.long(), 0, :, :] = prev_mks[ind_fixed_nodes.long()]
             given_masks_in[ind_fixed_nodes.long(), 1, :, :] = 1.0
             asdasd

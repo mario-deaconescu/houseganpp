@@ -104,7 +104,7 @@ fp_iter = tqdm(fp_loader, total=len(fp_dataset) // opt.batch_size + 1)
 
 # Generate samples
 cuda = False #True if torch.cuda.is_available() else False
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 graphs = []
 for i, batch in enumerate(fp_iter):
 

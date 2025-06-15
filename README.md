@@ -1,3 +1,7 @@
+This repo is intended to be used as a submodule for [HouseCFG](https://github.com/mario-deaconescu/HouseCFG). Some scripts may not work if used independently.
+
+---
+
 House-GAN++
 ======
 

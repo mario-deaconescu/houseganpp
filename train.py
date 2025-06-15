@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from PIL import Image, ImageDraw, ImageOps
-from misc.utils import combine_images, _init_input, selectRandomNodes, selectNodesTypes
+from misc.utils import combine_images, _init_input, selectRandomNodes, selectNodesTypes, get_device
 from models.models import Discriminator, Generator, compute_gradient_penalty
 
 
@@ -45,8 +45,7 @@ distance_loss = torch.nn.L1Loss()
 # Initialize generator and discriminator
 generator = Generator()
 discriminator = Discriminator()
-if torch.cuda.is_available():
-    device = torch.device('cuda:0')
+device = get_device()
 generator.to(device)
 discriminator.to(device)
 adversarial_loss.to(device)
@@ -57,7 +56,7 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
     generatorTest = Generator()
     generatorTest.load_state_dict(torch.load('./checkpoints/{}_{}.pth'.format(exp_folder, batches_done)))
     generatorTest = generatorTest.eval()
-    generatorTest.cuda()
+    generatorTest.to(get_device())
     with torch.no_grad():
         # Unpack batch
         mks, nds, eds, nd_to_sample, ed_to_sample = next(iter(fp_loader_test))
@@ -104,7 +103,7 @@ fp_loader_test = torch.utils.data.DataLoader(fp_dataset_test,
 # Optimizers
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.g_lr, betas=(opt.b1, opt.b2)) 
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.d_lr, betas=(opt.b1, opt.b2))
-Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if torch.cuda.is_available() else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ----------
 #  Training

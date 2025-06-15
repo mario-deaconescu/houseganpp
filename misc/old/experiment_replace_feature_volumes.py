@@ -158,8 +158,8 @@ generator.load_state_dict(torch.load(checkpoint))
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '../'
 
 # Initialize dataset iterator
@@ -168,7 +168,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 #  Vectorize
 # ------------
@@ -205,7 +205,7 @@ for i, batch in enumerate(fp_loader):
                 print('running state: {}'.format(str(fixed_nodes_state)))
                 # prev_feats = np.load(open('{}/runs/feat_run_{}.npy'.format(PREFIX, run_n-1), 'rb'),  encoding='bytes', allow_pickle=True)
                 prev_gen_mks = np.load('{}/runs/feat_run_{}.npy'.format(PREFIX, run_n-1), allow_pickle=True)
-                prev_gen_mks = torch.tensor(prev_gen_mks).cuda().float()
+                prev_gen_mks = torch.tensor(prev_gen_mks).to(get_device()).float()
                 curr_gen_mks, curr_feats = generator(z, given_nds, given_eds, given_v=prev_gen_mks, state=fixed_nodes_state)
             else:
                 print('running initial state')

@@ -52,14 +52,14 @@ distance_loss = torch.nn.L1Loss()
 generator = Generator()
 discriminator = Discriminator()
 
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
+if True:
+    generator.to(get_device())
+    discriminator.to(get_device())
 
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
-    adversarial_loss.cuda()
+if True:
+    generator.to(get_device())
+    discriminator.to(get_device())
+    adversarial_loss.to(get_device())
 
 # Support to multiple GPUs
 def graph_scatter(inputs, device_ids, indices):
@@ -121,16 +121,16 @@ def selectRandomNodes(nd_to_sample, batch_size):
         N = np.random.randint(rooms_num, size=1)
         # select random nodes or all nodes!
         # if np.random.normal(0, 1) > 0.5:
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda() ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device()) ##torch.tensor(list(range(rooms_num))).long().to(get_device()) ##
         # else:
-        #     fixed_nodes_state = torch.tensor([]).long().cuda()
+        #     fixed_nodes_state = torch.tensor([]).long().to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num 
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 
@@ -198,7 +198,7 @@ fp_loader_test = torch.utils.data.DataLoader(fp_dataset_test,
 # Optimizers
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.g_lr, betas=(opt.b1, opt.b2)) 
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.d_lr, betas=(opt.b1, opt.b2))
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
       
 
 # ----------

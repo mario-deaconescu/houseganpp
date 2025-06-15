@@ -161,14 +161,14 @@ def selectRandomNodes(nd_to_sample, batch_size):
         rooms = np.where(nd_to_sample == k)
         rooms_num = np.array(rooms).shape[-1]
         N = np.random.randint(rooms_num, size=1)
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda()
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 
@@ -197,8 +197,8 @@ generator.load_state_dict(torch.load(checkpoint))
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '../'
 
 # Initialize dataset iterator
@@ -207,7 +207,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ------------
 #  Vectorize

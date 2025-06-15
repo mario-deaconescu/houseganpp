@@ -57,14 +57,14 @@ def selectRandomNodes(nd_to_sample, batch_size):
         rooms = np.where(nd_to_sample == k)
         rooms_num = np.array(rooms).shape[-1]
         N = np.random.randint(rooms_num, size=1)
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda() ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device()) ##torch.tensor(list(range(rooms_num))).long().to(get_device()) ##
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num 
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 # Select nodes per room type
@@ -77,14 +77,14 @@ def selectNodesTypes(nd_to_sample, batch_size, nds):
         _t = [t for t in all_types if random.uniform(0, 1) > 0.5]
         fixed_rooms = [r for r, _t_x in enumerate(_types) if _t_x in _t]
 #         print(' existing types: {} \n sected types: {} \n fixed rooms {}'.format('-'.join([str(i) for i in _types]), '-'.join([str(i) for i in _t]), '-'.join([str(i) for i in fixed_rooms])))
-        fixed_nodes_state = torch.tensor(fixed_rooms).cuda()
+        fixed_nodes_state = torch.tensor(fixed_rooms).to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num 
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes.long()] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 def fix_nodes(prev_mks, ind_fixed_nodes):

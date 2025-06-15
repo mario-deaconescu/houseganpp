@@ -147,8 +147,8 @@ generator.load_state_dict(torch.load(checkpoint))
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '../'
 
 # Initialize dataset iterator
@@ -157,7 +157,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 #  Vectorize
 # ------------

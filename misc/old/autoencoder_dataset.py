@@ -76,7 +76,7 @@ class Autoencoder(nn.Module):
 
 
 	def forward(self, x):
-		x = x.cuda()
+		x = x.to(get_device())
 		x = self.enc(x.unsqueeze(1))
 		return x
 

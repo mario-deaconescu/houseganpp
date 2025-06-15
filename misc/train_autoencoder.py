@@ -13,7 +13,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 # Initialize dataset iterator
-model = Autoencoder().cuda()
+model = Autoencoder().to(get_device())
 ae_dataset = AutoencoderDataset(transform=transforms.Normalize(mean=[0.5], std=[0.5]))
 batch_size = 1024
 ae_loader = torch.utils.data.DataLoader(ae_dataset, 

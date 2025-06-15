@@ -20,7 +20,7 @@ import torch
 from PIL import Image, ImageDraw
 from reconstruct import reconstructFloorplan
 import svgwrite
-from utils import bb_to_img, bb_to_vec, bb_to_seg, mask_to_bb, remove_junctions, ID_COLOR, bb_to_im_fid
+from utils import bb_to_img, bb_to_vec, bb_to_seg, mask_to_bb, remove_junctions, ID_COLOR, bb_to_im_fid, get_device
 from models import Generator
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -116,9 +116,8 @@ generator = Generator()
 generator.load_state_dict(torch.load(checkpoint))
 
 # Initialize variables
-cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+
+generator.to(get_device())
 rooms_path = '/local-scratch4/nnauata/autodesk/FloorplanDataset/'
 
 # Initialize dataset iterator
@@ -127,7 +126,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ------------
 #  Vectorize

@@ -25,8 +25,8 @@ class AddCoords(nn.Module):
             xx_channel = xx_channel.repeat(batch_size_shape, 1, 1)
 
             if torch.cuda.is_available and self.use_cuda:
-                input_tensor = input_tensor.cuda()
-                xx_channel = xx_channel.cuda()
+                input_tensor = input_tensor.to(get_device())
+                xx_channel = xx_channel.to(get_device())
             out = torch.cat([input_tensor, xx_channel], dim=1)
 
             if self.with_r:
@@ -59,9 +59,9 @@ class AddCoords(nn.Module):
             yy_channel = yy_channel.repeat(batch_size_shape, 1, 1, 1)
 
             if torch.cuda.is_available and self.use_cuda:
-                input_tensor = input_tensor.cuda()
-                xx_channel = xx_channel.cuda()
-                yy_channel = yy_channel.cuda()
+                input_tensor = input_tensor.to(get_device())
+                xx_channel = xx_channel.to(get_device())
+                yy_channel = yy_channel.to(get_device())
             out = torch.cat([input_tensor, xx_channel, yy_channel], dim=1)
 
             if self.with_r:
@@ -95,10 +95,10 @@ class AddCoords(nn.Module):
             zz_channel = torch.cat([zx_channel + i for i in range(dim_y)], dim=3)
 
             if torch.cuda.is_available and self.use_cuda:
-                input_tensor = input_tensor.cuda()
-                xx_channel = xx_channel.cuda()
-                yy_channel = yy_channel.cuda()
-                zz_channel = zz_channel.cuda()
+                input_tensor = input_tensor.to(get_device())
+                xx_channel = xx_channel.to(get_device())
+                yy_channel = yy_channel.to(get_device())
+                zz_channel = zz_channel.to(get_device())
             out = torch.cat([input_tensor, xx_channel, yy_channel, zz_channel], dim=1)
 
             if self.with_r:

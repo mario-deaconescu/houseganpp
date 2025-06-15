@@ -25,7 +25,7 @@ batch_size = 1
 ae_loader = torch.utils.data.DataLoader(ae_dataset, 
                                         batch_size=batch_size, 
                                         shuffle=True)
-generator = Generator().cuda()
+generator = Generator().to(get_device())
 update_freq = 256
 pretrained_dict = torch.load(checkpoint)
 model_dict = generator.state_dict()
@@ -45,14 +45,14 @@ def selectRandomNodes(nd_to_sample, batch_size):
         rooms = np.where(nd_to_sample == k)
         rooms_num = np.array(rooms).shape[-1]
         N = np.random.randint(rooms_num, size=1)
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda()
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num
     fixed_nodes = torch.cat(fixed_nodes)
     ind_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     ind_fixed_nodes[fixed_nodes] = 1.0
-    ind_fixed_nodes = ind_fixed_nodes.cuda()
+    ind_fixed_nodes = ind_fixed_nodes.to(get_device())
     return ind_fixed_nodes
 
 optimizer = optim.Adam(generator.parameters(), lr=0.0001)
@@ -63,14 +63,14 @@ for k in range(1000):
 
         # retrieve data
         prev_feats, mask, nodes, edges = batch
-        prev_feats, mask = Variable(prev_feats).squeeze(0).cuda(), Variable(mask).squeeze(0).cuda()
-        given_nds, given_eds = Variable(nodes).squeeze(0).cuda(), Variable(edges).squeeze(0).cuda()
+        prev_feats, mask = Variable(prev_feats).squeeze(0).to(get_device()), Variable(mask).squeeze(0).to(get_device())
+        given_nds, given_eds = Variable(nodes).squeeze(0).to(get_device()), Variable(edges).squeeze(0).to(get_device())
 
         # generate random state
         N = np.random.randint(given_nds.shape[1], size=1)
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(given_nds.shape[1])), size=N, replace=False)).cuda()
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(given_nds.shape[1])), size=N, replace=False)).to(get_device())
         # print('running state: {}'.format(str(fixed_nodes_state)))
-        z = Variable(torch.Tensor(np.random.normal(0, 1, (mask.shape[0], 128)))).cuda()
+        z = Variable(torch.Tensor(np.random.normal(0, 1, (mask.shape[0], 128)))).to(get_device())
         gen_mks, curr_feats = generator(z, ind_fixed_nodes, given_masks, given_nds, given_eds, given_v=mask, state=fixed_nodes_state)
         
         # Select random nodes

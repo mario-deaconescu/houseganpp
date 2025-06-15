@@ -14,7 +14,7 @@ from sklearn.decomposition import PCA
 autoencoderTest = Autoencoder()
 autoencoderTest.load_state_dict(torch.load('./checkpoints/exp_autoencoder_A_72900_ae.pth'))
 autoencoderTest = autoencoderTest.eval()
-autoencoderTest.cuda()
+autoencoderTest.to(get_device())
 
 # function returns WSS score for k values from 1 to kmax
 def calculate_WSS(points, kmax):
@@ -35,7 +35,7 @@ def calculate_WSS(points, kmax):
 
 def extract_features(mks, _types):
 
-	mks_tensor = torch.tensor(mks).float().cuda().unsqueeze(1)
+	mks_tensor = torch.tensor(mks).float().to(get_device()).unsqueeze(1)
 	mks_tensor[mks_tensor<=0] = 0.0
 	mks_tensor[mks_tensor>0] = 1.0
 	gen_rec, feat = autoencoderTest(mks_tensor)

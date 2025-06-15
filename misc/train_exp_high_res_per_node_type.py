@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 from PIL import Image, ImageDraw, ImageOps
-from utils import combine_images_maps, rectangle_renderer
+from utils import combine_images_maps, rectangle_renderer, get_device
 from models_exp_high_res import Discriminator, Generator, compute_gradient_penalty, weights_init_normal
 
 parser = argparse.ArgumentParser()
@@ -35,7 +35,6 @@ parser.add_argument("--n_critic", type=int, default=1, help="number of training 
 parser.add_argument("--target_set", type=str, default='A', help="which split to remove")
 opt = parser.parse_args()
 
-cuda = True if torch.cuda.is_available() else False
 lambda_gp = 10
 multi_gpu = False
 # exp_folder = "{}_{}_g_lr_{}_d_lr_{}_bs_{}_ims_{}_ld_{}_b1_{}_b2_{}".format(opt.exp_folder, opt.target_set, opt.g_lr, opt.d_lr, \
@@ -52,14 +51,12 @@ distance_loss = torch.nn.L1Loss()
 generator = Generator()
 discriminator = Discriminator()
 
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
+generator.to(get_device())
+discriminator.to(get_device())
 
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
-    adversarial_loss.cuda()
+generator.to(get_device())
+discriminator.to(get_device())
+adversarial_loss.to(get_device())
 
 # Support to multiple GPUs
 def graph_scatter(inputs, device_ids, indices):
@@ -121,16 +118,16 @@ def selectRandomNodes(nd_to_sample, batch_size):
         N = np.random.randint(rooms_num, size=1)
         # select random nodes or all nodes!
         # if np.random.normal(0, 1) > 0.5:
-        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).cuda() ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        fixed_nodes_state = torch.tensor(np.random.choice(list(range(rooms_num)), size=N, replace=False)).to(get_device()) ##torch.tensor(list(range(rooms_num))).long().to(get_device()) ##
         # else:
-        #     fixed_nodes_state = torch.tensor([]).long().cuda()
+        #     fixed_nodes_state = torch.tensor([]).long().to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num 
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 # Select nodes per room type
@@ -148,16 +145,16 @@ def selectNodesTypes(nd_to_sample, batch_size, nds):
         # N = np.random.randint(rooms_num, size=1)
         # select random nodes or all nodes!
         # if np.random.normal(0, 1) > 0.5:
-        fixed_nodes_state = torch.tensor(fixed_rooms).cuda() ##torch.tensor(list(range(rooms_num))).long().cuda() ##
+        fixed_nodes_state = torch.tensor(fixed_rooms).to(get_device()) ##torch.tensor(list(range(rooms_num))).long().to(get_device()) ##
         # else:
-        #     fixed_nodes_state = torch.tensor([]).long().cuda()
+        #     fixed_nodes_state = torch.tensor([]).long().to(get_device())
         fixed_nodes_state += shift
         fixed_nodes.append(fixed_nodes_state)
         shift += rooms_num 
     fixed_nodes = torch.cat(fixed_nodes)
     bin_fixed_nodes = torch.zeros((nd_to_sample.shape[0], 1))
     bin_fixed_nodes[fixed_nodes.long()] = 1.0
-    bin_fixed_nodes = bin_fixed_nodes.float().cuda()
+    bin_fixed_nodes = bin_fixed_nodes.float().to(get_device())
     return fixed_nodes, bin_fixed_nodes
 
 # Visualize a single batch
@@ -167,7 +164,7 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
     generatorTest = Generator()
     generatorTest.load_state_dict(torch.load('./checkpoints/{}_{}.pth'.format(exp_folder, batches_done)))
     generatorTest = generatorTest.eval()
-    generatorTest.cuda()
+    generatorTest.to(get_device())
 
     with torch.no_grad():
         # Unpack batch
@@ -230,7 +227,7 @@ fp_loader_test = torch.utils.data.DataLoader(fp_dataset_test,
 # Optimizers
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.g_lr, betas=(opt.b1, opt.b2)) 
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.d_lr, betas=(opt.b1, opt.b2))
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
       
 
 # ----------

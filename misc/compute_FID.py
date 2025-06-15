@@ -20,7 +20,7 @@ import torch
 from PIL import Image, ImageDraw
 from reconstruct import reconstructFloorplan
 import svgwrite
-from utils import bb_to_img, bb_to_vec, bb_to_seg, mask_to_bb, remove_junctions, ID_COLOR, bb_to_im_fid
+from utils import bb_to_img, bb_to_vec, bb_to_seg, mask_to_bb, remove_junctions, ID_COLOR, bb_to_im_fid, get_device
 from models import Generator
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -55,8 +55,7 @@ generator.load_state_dict(torch.load(checkpoint))
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+generator.to(get_device())
 rooms_path = '/home/nelson/Workspace/autodesk/autodesk/FloorplanDataset/'
 
 # Initialize dataset iterator
@@ -65,7 +64,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=True, collate_fn=floorplan_collate_fn)
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ------------
 #  Vectorize
@@ -89,7 +88,7 @@ for i, batch in enumerate(fp_loader):
         # plot images
         z = Variable(Tensor(np.random.normal(0, 1, (real_mks.shape[0], opt.latent_dim))))
         with torch.no_grad():
-            gen_mks = generator(z, given_nds, given_eds.cuda())
+            gen_mks = generator(z, given_nds, given_eds.to(get_device()))
             gen_bbs = np.array([np.array(mask_to_bb(mk)) for mk in gen_mks.detach().cpu()])
             real_bbs = np.array([np.array(mask_to_bb(mk)) for mk in real_mks.detach().cpu()])
             real_nodes = np.where(given_nds.detach().cpu()==1)[-1]

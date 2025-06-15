@@ -47,10 +47,9 @@ distance_loss = torch.nn.L1Loss()
 # Initialize generator and discriminator
 generator = Generator()
 discriminator = Discriminator()
-if cuda:
-    generator.cuda()
-    discriminator.cuda()
-    adversarial_loss.cuda()
+generator.to(get_device())
+discriminator.to(get_device())
+adversarial_loss.to(get_device())
 
 # Visualize a single batch
 def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_size=8):
@@ -58,7 +57,7 @@ def visualizeSingleBatch(fp_loader_test, opt, exp_folder, batches_done, batch_si
     generatorTest = Generator()
     generatorTest.load_state_dict(torch.load('./checkpoints/{}_{}.pth'.format(exp_folder, batches_done)))
     generatorTest = generatorTest.eval()
-    generatorTest.cuda()
+    generatorTest.to(get_device())
     with torch.no_grad():
         # Unpack batch
         mks, nds, eds, nd_to_sample, ed_to_sample = next(iter(fp_loader_test))
@@ -105,7 +104,7 @@ fp_loader_test = torch.utils.data.DataLoader(fp_dataset_test,
 # Optimizers
 optimizer_G = torch.optim.Adam(generator.parameters(), lr=opt.g_lr, betas=(opt.b1, opt.b2)) 
 optimizer_D = torch.optim.Adam(discriminator.parameters(), lr=opt.d_lr, betas=(opt.b1, opt.b2))
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # ----------
 #  Training

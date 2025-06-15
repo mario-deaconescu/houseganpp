@@ -23,7 +23,7 @@ import svgwrite
 from models.models import Generator
 # from models.models_improved import Generator
 
-from misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph
+from misc.utils import _init_input, ID_COLOR, draw_masks, draw_graph, estimate_graph, get_device
 from collections import defaultdict
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -60,9 +60,7 @@ model.load_state_dict(torch.load(checkpoint), strict=False)
 model = model.eval()
 
 # Initialize variables
-cuda = True if torch.cuda.is_available() else False
-if cuda:
-    model.cuda()
+model.to(get_device())
 rooms_path = '../'
 
 # initialize dataset iterator
@@ -71,7 +69,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset_test,
                                         batch_size=opt.batch_size, 
                                         shuffle=False, collate_fn=floorplan_collate_fn)
 # optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 
 # run inference
@@ -81,7 +79,7 @@ def _infer(graph, model, prev_state=None):
     z, given_masks_in, given_nds, given_eds = _init_input(graph, prev_state)
     # run inference model
     with torch.no_grad():
-        masks = model(z.to('cuda'), given_masks_in.to('cuda'), given_nds.to('cuda'), given_eds.to('cuda'))
+        masks = model(z.to(get_device()), given_masks_in.to(get_device()), given_nds.to(get_device()), given_eds.to(get_device()))
         masks = masks.detach().cpu().numpy()
     return masks
 

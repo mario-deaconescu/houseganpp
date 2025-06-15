@@ -98,8 +98,8 @@ generator.eval()
 
 # Initialize variables
 cuda = True if torch.cuda.is_available() else False
-if cuda:
-    generator.cuda()
+if True:
+    generator.to(get_device())
 rooms_path = '/local-scratch2/nnauata/autodesk/FloorplanDataset/'
 
 # Configure data loader
@@ -113,7 +113,7 @@ fp_loader = torch.utils.data.DataLoader(fp_dataset,
 fp_iter = tqdm(fp_loader, total=len(fp_dataset) // opt.batch_size + 1)
 
 # Optimizers
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+Tensor = torch.cuda.FloatTensor if cuda else torch.mps.FloatTensor if torch.mps.is_available() else torch.FloatTensor
 
 # Generate samples
 all_imgs = []
